@@ -12,13 +12,13 @@ import time
 start_time = time.time()
 
 # Cargamos los datos
-df = pd.read_csv('./SECOP_II_-_Procesos_de_Contrataci_n (1).csv')
+df = pd.read_csv('./SECOP_II_-_Procesos_de_Contrataci_n (1).csv',nrows=1000000)
 
 # Muestreo de datos, solo usamos el 10% de los datos, una mustra. 300.000
 df = df.sample(frac=0.1)
 
 # Seleccionamos las columnas que vamos a usar para predecir
-columns = ['Entidad', 'Departamento Entidad', 'Ciudad Entidad', 'OrdenEntidad', 'Entidad Centralizada', 'Fase', 'Precio Base', 'Modalidad de Contratacion', 'Duracion', 'Unidad de Duracion', 'Tipo de Contrato', 'Subtipo de Contrato']
+columns = ['Entidad', 'Departamento Entidad', 'Ciudad Entidad', 'OrdenEntidad', 'Entidad Centralizada', 'Fase', 'Precio Base', 'Modalidad de Contratacion', 'Duracion', 'Unidad de Duracion', 'Tipo de Contrato', 'Subtipo de Contrato','Justificación Modalidad de Contratación','Proveedores Invitados']
 
 # Preprocesamiento de los datos
 # Convertimos las columnas categóricas a valores numéricos
@@ -56,6 +56,12 @@ df['Tipo de Contrato'] = le_tipo.fit_transform(df['Tipo de Contrato'])
 
 le_subtipo = LabelEncoder()
 df['Subtipo de Contrato'] = le_subtipo.fit_transform(df['Subtipo de Contrato'])
+
+le_justificacion = LabelEncoder()
+df['Justificación Modalidad de Contratación'] = le_justificacion.fit_transform(df['Justificación Modalidad de Contratación'])
+
+le_proveedores = LabelEncoder()
+df['Proveedores Invitados'] = le_proveedores.fit_transform(df['Proveedores Invitados'])
 
 X = df[columns]
 y = df['Adjudicado']
