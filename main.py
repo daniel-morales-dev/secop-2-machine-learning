@@ -9,6 +9,7 @@ from sklearn.metrics import confusion_matrix, precision_recall_curve,  precision
 from sklearn.model_selection import cross_val_score
 import matplotlib.pyplot as plt
 import seaborn as sns
+import joblib
 
 import time
 
@@ -32,10 +33,10 @@ start_time = time.time()
 df = pd.read_csv('./SECOP_II_-_Procesos_de_Contrataci_n (1).csv',nrows=1000000)
 
 # Muestreo de datos, solo usamos el 10% de los datos, una mustra. 300.000
-# df = df.sample(frac=0.1)
+df = df.sample(frac=0.2)
 
 # Seleccionamos las columnas que vamos a usar para predecir
-columns = ['Entidad', 'Departamento Entidad', 'Ciudad Entidad', 'OrdenEntidad', 'Entidad Centralizada', 'Fase', 'Precio Base', 'Modalidad de Contratacion', 'Duracion', 'Unidad de Duracion', 'Tipo de Contrato', 'Subtipo de Contrato','Justificación Modalidad de Contratación','Proveedores Invitados']
+columns = [ 'Departamento Entidad', 'Ciudad Entidad', 'OrdenEntidad', 'Entidad Centralizada', 'Fase', 'Precio Base', 'Modalidad de Contratacion', 'Duracion', 'Unidad de Duracion', 'Tipo de Contrato', 'Subtipo de Contrato','Justificación Modalidad de Contratación','Proveedores Invitados']
 
 # Preprocesamiento de los datos
 # Convertimos las columnas categóricas a valores numéricos
@@ -43,9 +44,6 @@ le = LabelEncoder()
 
 le_adjudicado = LabelEncoder()
 df['Adjudicado'] = le_adjudicado.fit_transform(df['Adjudicado'])
-
-le_entidad = LabelEncoder()
-df['Entidad'] = le_entidad.fit_transform(df['Entidad'])
 
 le_departamento = LabelEncoder()
 df['Departamento Entidad'] = le_departamento.fit_transform(df['Departamento Entidad'])
@@ -79,6 +77,11 @@ df['Justificación Modalidad de Contratación'] = le_justificacion.fit_transform
 
 le_proveedores = LabelEncoder()
 df['Proveedores Invitados'] = le_proveedores.fit_transform(df['Proveedores Invitados'])
+
+
+# Eliminar la columna 'Entidad' después de las transformaciones
+df.drop('Entidad', axis=1, inplace=True)
+
 
 X = df[columns]
 y = df['Adjudicado']
@@ -133,10 +136,13 @@ plt.show()
 """ scores = cross_val_score(model, X.sample(frac=0.1), y.sample(frac=0.1), cv=3)
 print('Precisión de cross-validation:', scores.mean()) """
 
+# Guardar el modelo en un archivo
+joblib.dump(model, 'modelo_entrenado.joblib')
 
 # PRUEBA MANUAL #
 # Selecciona una fila aleatoria del DataFrame completo
-fila_aleatoria = df.sample()
+fila_aleatoria = df[df['Adjudicado'] == 1].sample()
+
 
 # Guarda la etiqueta verdadera
 etiqueta_verdadera = fila_aleatoria['Adjudicado']
@@ -144,7 +150,7 @@ print(etiqueta_verdadera)
 
 # Selecciona solo las columnas que necesitas para la predicción
 fila_aleatoria = fila_aleatoria[columns]
-print(fila_aleatoria)
+
 
 # Aplica las mismas transformaciones que aplicaste a tus datos de entrenamiento
 fila_aleatoria['OrdenEntidad'] = transform_with_unknowns(fila_aleatoria['OrdenEntidad'], le_orden)
@@ -172,16 +178,20 @@ print('Probabilidad de Adjudicación:', probabilidad_adjudicacion)
 # 1. ANALISIS DE AFINIDAD
 fila_afinidad = fila_aleatoria[columns]
 # Calcula la similitud con otras filas usando alguna métrica, por ejemplo, la correlación
-similitud = df.apply(lambda row: np.sum(row[columns] == fila_afinidad.iloc[0][columns]), axis=1)
+similitud = X_train.apply(lambda row: np.sum(row[columns] == fila_afinidad.iloc[0][columns]), axis=1)
 
 
 # Agrega la columna de similitud al DataFrame original
-df['Similitud'] = similitud
+X_train['Similitud'] = similitud
 
 # Muestra contratos similares ordenados por similitud
-contratos_similares = df.sort_values('Similitud', ascending=False).head(10)
+contratos_similares = X_train.sort_values('Similitud', ascending=False).head(10)
+
+columns_to_show = ['Ciudad Entidad','Tipo de Contrato','Precio Base']
+
 
 # Revierte las transformaciones para obtener los valores reales
+contratos_similares['Ciudad Entidad'] = le_ciudad.inverse_transform(contratos_similares['Ciudad Entidad'])
 contratos_similares['OrdenEntidad'] = le_orden.inverse_transform(contratos_similares['OrdenEntidad'])
 contratos_similares['Entidad Centralizada'] = le_centralizada.inverse_transform(contratos_similares['Entidad Centralizada'])
 contratos_similares['Fase'] = le_fase.inverse_transform(contratos_similares['Fase'])
@@ -191,7 +201,7 @@ contratos_similares['Tipo de Contrato'] = le_tipo.inverse_transform(contratos_si
 contratos_similares['Subtipo de Contrato'] = le_subtipo.inverse_transform(contratos_similares['Subtipo de Contrato'])
 
 print('Contratos Similares:')
-print(contratos_similares[columns])
+print(contratos_similares[columns_to_show])
 
 end_time = time.time()
 print('Tiempo total de ejecución:', end_time - start_time, 'segundos')
