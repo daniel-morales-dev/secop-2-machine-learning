@@ -1,14 +1,30 @@
 # pip install -r requirements.txt
 import pandas as pd
+import numpy as np
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import accuracy_score
 from sklearn.preprocessing import LabelEncoder
 from sklearn.ensemble import RandomForestClassifier
-from sklearn.decomposition import PCA
 from sklearn.metrics import confusion_matrix, precision_recall_curve,  precision_score, recall_score, f1_score
+from sklearn.model_selection import cross_val_score
 import matplotlib.pyplot as plt
+import seaborn as sns
 
 import time
+
+# Definición de la función transform_with_unknowns
+def transform_with_unknowns(column, encoder):
+    # Transforma los datos conocidos
+    known_mask = column.isin(encoder.classes_)
+    column_known = column[known_mask]
+    transformed_known = encoder.transform(column_known)
+
+    # Asigna -1 a los datos desconocidos
+    transformed = column.copy()
+    transformed[known_mask] = transformed_known
+    transformed[~known_mask] = -1
+
+    return transformed
 
 start_time = time.time()
 
@@ -16,7 +32,7 @@ start_time = time.time()
 df = pd.read_csv('./SECOP_II_-_Procesos_de_Contrataci_n (1).csv',nrows=1000000)
 
 # Muestreo de datos, solo usamos el 10% de los datos, una mustra. 300.000
-df = df.sample(frac=0.1)
+# df = df.sample(frac=0.1)
 
 # Seleccionamos las columnas que vamos a usar para predecir
 columns = ['Entidad', 'Departamento Entidad', 'Ciudad Entidad', 'OrdenEntidad', 'Entidad Centralizada', 'Fase', 'Precio Base', 'Modalidad de Contratacion', 'Duracion', 'Unidad de Duracion', 'Tipo de Contrato', 'Subtipo de Contrato','Justificación Modalidad de Contratación','Proveedores Invitados']
@@ -67,10 +83,6 @@ df['Proveedores Invitados'] = le_proveedores.fit_transform(df['Proveedores Invit
 X = df[columns]
 y = df['Adjudicado']
 
-# Reducción de la dimensionalidad
-pca = PCA(n_components=10)
-X = pca.fit_transform(X)
-
 # Dividimos los datos en conjuntos de entrenamiento y prueba, 20% de los datos se usaran como prueba
 X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
 
@@ -119,8 +131,8 @@ plt.show()
 
 # Aplicamos cross-validation
 """ scores = cross_val_score(model, X.sample(frac=0.1), y.sample(frac=0.1), cv=3)
-print('Precisión de cross-validation:', scores.mean())
-"""
+print('Precisión de cross-validation:', scores.mean()) """
+
 
 # PRUEBA MANUAL #
 # Selecciona una fila aleatoria del DataFrame completo
@@ -134,19 +146,6 @@ print(etiqueta_verdadera)
 fila_aleatoria = fila_aleatoria[columns]
 print(fila_aleatoria)
 
-def transform_with_unknowns(column, encoder):
-    # Transforma los datos conocidos
-    known_mask = column.isin(encoder.classes_)
-    column_known = column[known_mask]
-    transformed_known = encoder.transform(column_known)
-
-    # Asigna -1 a los datos desconocidos
-    transformed = column.copy()
-    transformed[known_mask] = transformed_known
-    transformed[~known_mask] = -1
-
-    return transformed
-
 # Aplica las mismas transformaciones que aplicaste a tus datos de entrenamiento
 fila_aleatoria['OrdenEntidad'] = transform_with_unknowns(fila_aleatoria['OrdenEntidad'], le_orden)
 fila_aleatoria['Entidad Centralizada'] = transform_with_unknowns(fila_aleatoria['Entidad Centralizada'], le_centralizada)
@@ -156,15 +155,43 @@ fila_aleatoria['Unidad de Duracion'] = transform_with_unknowns(fila_aleatoria['U
 fila_aleatoria['Tipo de Contrato'] = transform_with_unknowns(fila_aleatoria['Tipo de Contrato'], le_tipo)
 fila_aleatoria['Subtipo de Contrato'] = transform_with_unknowns(fila_aleatoria['Subtipo de Contrato'], le_subtipo)
 
-# Aplica la transformación PCA a la fila aleatoria
-fila_aleatoria_pca = pca.transform(fila_aleatoria)
-
 # Haz una predicción con tu modelo
-prediccion = model.predict(fila_aleatoria_pca)
+prediccion = model.predict(fila_aleatoria)
 
 # Imprime la etiqueta verdadera y la predicción
 print('Etiqueta verdadera:', etiqueta_verdadera)
 print('Predicción del modelo:', prediccion)
+
+probabilidades = model.predict_proba(fila_aleatoria)
+# La segunda columna representa la probabilidad de la clase "adjudicado"
+probabilidad_adjudicacion = probabilidades[0, 1]
+
+# Imprime la probabilidad
+print('Probabilidad de Adjudicación:', probabilidad_adjudicacion)
+
+# 1. ANALISIS DE AFINIDAD
+fila_afinidad = fila_aleatoria[columns]
+# Calcula la similitud con otras filas usando alguna métrica, por ejemplo, la correlación
+similitud = df.apply(lambda row: np.sum(row[columns] == fila_afinidad.iloc[0][columns]), axis=1)
+
+
+# Agrega la columna de similitud al DataFrame original
+df['Similitud'] = similitud
+
+# Muestra contratos similares ordenados por similitud
+contratos_similares = df.sort_values('Similitud', ascending=False).head(10)
+
+# Revierte las transformaciones para obtener los valores reales
+contratos_similares['OrdenEntidad'] = le_orden.inverse_transform(contratos_similares['OrdenEntidad'])
+contratos_similares['Entidad Centralizada'] = le_centralizada.inverse_transform(contratos_similares['Entidad Centralizada'])
+contratos_similares['Fase'] = le_fase.inverse_transform(contratos_similares['Fase'])
+contratos_similares['Modalidad de Contratacion'] = le_modalidad.inverse_transform(contratos_similares['Modalidad de Contratacion'])
+contratos_similares['Unidad de Duracion'] = le_duracion.inverse_transform(contratos_similares['Unidad de Duracion'])
+contratos_similares['Tipo de Contrato'] = le_tipo.inverse_transform(contratos_similares['Tipo de Contrato'])
+contratos_similares['Subtipo de Contrato'] = le_subtipo.inverse_transform(contratos_similares['Subtipo de Contrato'])
+
+print('Contratos Similares:')
+print(contratos_similares[columns])
 
 end_time = time.time()
 print('Tiempo total de ejecución:', end_time - start_time, 'segundos')
